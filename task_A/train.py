@@ -27,7 +27,7 @@ def main():
     loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
 
     # Optional: classification head
-    classifier = Classifier(model.text_projection.shape[1]*2, 128, 1).to(DEVICE)
+    classifier = Classifier(model.text_projection.shape[1]*3, 128, 1).to(DEVICE)
     criterion = nn.BCEWithLogitsLoss()
     optimizer = torch.optim.AdamW(classifier.parameters(), lr=LR)
 
@@ -38,25 +38,32 @@ def main():
         correct_total = 0
         total_samples = 0
 
-        for images, tokenized_texts, labels, correct_ids in tqdm(loader):
-            images = images.to(DEVICE)
-            batch_size = images.size(0)
+        for images, tokenized_choices, tokenized_answers, labels, correct_ids in tqdm(loader):
+            images = images.to(DEVICE) # [B, 3, 224, 224]
             
             # Reshape text input: [B, 4, 77] → [B*4, 77]
-            tokenized_texts = tokenized_texts.view(-1, tokenized_texts.size(-1)).to(DEVICE)
+            tokenized_choices = tokenized_choices.view(-1, tokenized_choices.size(-1)).to(DEVICE) # [B*4, 77] 
+            tokenized_answers = tokenized_answers.view(-1, tokenized_answers.size(-1)).to(DEVICE) # [B, 77]
+            
 
             labels = labels.to(DEVICE)
             correct_ids = correct_ids.to(DEVICE)
 
             with torch.no_grad():
                 image_features = model.encode_image(images)  # [B, 512]
-                text_features = model.encode_text(tokenized_texts)  # [B*4, 512]
+                answer_features = model.encode_text(tokenized_answers)  # [B, 512]
+                text_features = model.encode_text(tokenized_choices)  # [B*4, 512]
 
             # [TY]: combine text and image features
             image_features = image_features.unsqueeze(1).repeat(1, 4, 1)  # [B, 4, 512]
-            text_features = text_features.view(batch_size, 4, -1)            # [B, 4, 512]
+            answer_features = answer_features.unsqueeze(1).repeat(1, 4, 1)  # [B, 4, 512]
+            text_features = text_features.view(BATCH_SIZE, 4, -1)            # [B, 4, 512]
+
+            image_features = image_features.float()
+            answer_features = answer_features.float()
             text_features = text_features.float()
-            combined = torch.cat([image_features, text_features], dim=-1)
+
+            combined = torch.cat([image_features, text_features, answer_features], dim=-1)
             logits = classifier(combined).squeeze(-1) # [B, 4]
 
             # Convert labels from one-hot to index if needed

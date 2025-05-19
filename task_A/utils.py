@@ -46,7 +46,7 @@ class HallucinationDataset(Dataset):
         image_tensor = self.preprocess(image)
         
         question = sample['system1_question']
-        description = sample['system1_answer']
+        answer = sample['system1_answer']
         choices = sample["choices"]
 
         texts = []
@@ -56,8 +56,10 @@ class HallucinationDataset(Dataset):
             texts.append(text)
             
         MAX_TOKENS = 77
-        tokenized = [self.tokenizer(t, truncate=True)[0] for t in texts]
-        tokenized = torch.stack(tokenized)  # shape: [4, 77]
+        tokenized_choice = [self.tokenizer(t, truncate=True)[0] for t in texts]
+        tokenized_choice = torch.stack(tokenized_choice)  # shape: [4, 77]
+
+        tokenized_text = self.tokenizer(answer, truncate=True)
 
         # encoded_texts = [self.tokenizer(text)]
         correct_choice_id = ord(sample["correct_choice"]) - ord("A")
@@ -65,4 +67,4 @@ class HallucinationDataset(Dataset):
         labels[correct_choice_id] = 1
 
         
-        return image_tensor, tokenized, labels, correct_choice_id
+        return image_tensor, tokenized_choice, tokenized_text, labels, correct_choice_id
